@@ -3,7 +3,17 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { registerRoutes } from "./routes";
-import { log } from "./vite";
+
+// Simple logging function to avoid vite import in production
+const log = (message: string, source = "express") => {
+  const formattedTime = new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+  console.log(`${formattedTime} [${source}] ${message}`);
+};
 
 const app = express();
 app.use(express.json());
@@ -52,6 +62,15 @@ app.use((req, res, next) => {
             note: "Frontend not built yet"
           });
         });
+      }
+    } else {
+      // Development mode - import vite only when needed
+      try {
+        const { setupVite } = await import("./vite");
+        const server = createServer(app);
+        await setupVite(app, server);
+      } catch (error) {
+        console.warn("Vite not available for development:", error);
       }
     }
 
