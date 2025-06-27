@@ -1,8 +1,5 @@
-import { promises as fs } from 'fs';
 import pdfParse from 'pdf-parse';
 import * as mammoth from 'mammoth';
-import { createReadStream } from 'fs';
-import { Readable } from 'stream';
 
 export async function extractTextFromDocument(
   fileBuffer: Buffer,
