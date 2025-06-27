@@ -1,4 +1,4 @@
-import { resumeAnalysis, type ResumeAnalysis, type InsertResumeAnalysis, users, type User, type InsertUser } from "@shared/schema";
+import { resumeAnalysis, type ResumeAnalysis, type InsertResumeAnalysis, users, type User, type InsertUser } from "./schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 

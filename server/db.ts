@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from '../shared/schema';
+import * as schema from './schema';
 
 // Create connection to the database with fallback
 const connectionString = process.env.DATABASE_URL || 'postgresql://localhost:5432/hireindex';
