@@ -26,12 +26,12 @@ In your Vercel project settings, add these environment variables:
 4. Select the repository containing this project
 
 ### 2. Configure Build Settings
-Vercel will automatically detect the configuration from `vercel.json`, but you can verify:
+Vercel will automatically detect the configuration from `package.json`:
 
-- **Framework Preset**: Other
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist`
-- **Install Command**: `npm install`
+- **Framework Preset**: Vite (auto-detected)
+- **Build Command**: `npm run build` (auto-detected)
+- **Output Directory**: `dist` (auto-detected)
+- **Install Command**: `npm install` (auto-detected)
 
 ### 3. Deploy
 1. Click "Deploy"
