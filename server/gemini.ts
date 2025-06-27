@@ -18,8 +18,8 @@ export interface ResumeAnalysisResult {
 
 import fetch from "node-fetch";
 
-
-const GEMINI_API_KEY = "c";
+// Get API key from environment variable with fallback
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "your-gemini-api-key-here";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=" + GEMINI_API_KEY;
 const GEMINI_TIMEOUT_MS = 30000; // 30 seconds
 
@@ -47,6 +47,12 @@ Return your response as a JSON object with these keys:
 
 // Function to check if the document is a resume using Gemini
 export async function isResumeDocument(text: string): Promise<boolean> {
+  // Check if API key is valid
+  if (!GEMINI_API_KEY || GEMINI_API_KEY === "your-gemini-api-key-here") {
+    console.warn("Gemini API key not configured, assuming document is a resume");
+    return true;
+  }
+
   const prompt = `Is the following document a resume or CV? Reply only with 'yes' or 'no'.\n\nDocument:\n${text}`;
   const body = {
     contents: [
@@ -69,16 +75,27 @@ export async function isResumeDocument(text: string): Promise<boolean> {
       body: JSON.stringify(body),
       signal: controller.signal
     });
+  } catch (error) {
+    console.error("Network error calling Gemini API:", error);
+    return true; // Assume it's a resume if API call fails
   } finally {
     clearTimeout(timeout);
   }
+  
   if (!response.ok) {
-    throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    console.error(`Gemini API error: ${response.status} ${response.statusText}`);
+    return true; // Assume it's a resume if API call fails
   }
-  const data: any = await response.json();
-  let resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  resultText = resultText.trim().toLowerCase();
-  return resultText.startsWith('yes');
+  
+  try {
+    const data: any = await response.json();
+    let resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    resultText = resultText.trim().toLowerCase();
+    return resultText.startsWith('yes');
+  } catch (error) {
+    console.error("Error parsing Gemini response:", error);
+    return true; // Assume it's a resume if parsing fails
+  }
 }
 
 // Helper to ensure all sections are present
@@ -103,6 +120,31 @@ export async function analyzeResumeWithGemini(text: string): Promise<ResumeAnaly
     throw new Error("Resume text is empty. Cannot analyze an empty document.");
   }
   console.log("Extracted resume text:", text.slice(0, 500)); // Log first 500 chars
+
+  // Check if API key is valid
+  if (!GEMINI_API_KEY || GEMINI_API_KEY === "your-gemini-api-key-here") {
+    console.warn("Gemini API key not configured, returning fallback analysis");
+    return {
+      overallScore: 75,
+      keywordsScore: 75,
+      experienceScore: 75,
+      skillsScore: 75,
+      educationScore: 75,
+      formattingScore: 75,
+      feedback: {
+        keywords: "API not configured. Please configure Gemini API key for detailed analysis.",
+        experience: "API not configured. Please configure Gemini API key for detailed analysis.",
+        skills: "API not configured. Please configure Gemini API key for detailed analysis.",
+        education: "API not configured. Please configure Gemini API key for detailed analysis.",
+        formatting: "API not configured. Please configure Gemini API key for detailed analysis."
+      },
+      improvementSuggestions: [
+        "Configure your Gemini API key for detailed resume analysis.",
+        "Ensure your resume is in PDF or DOCX format.",
+        "Make sure your resume contains clear sections for experience, skills, and education."
+      ]
+    };
+  }
 
   const prompt = `${SYSTEM_PROMPT}\n\nResume:\n${text}`;
 
@@ -137,15 +179,26 @@ export async function analyzeResumeWithGemini(text: string): Promise<ResumeAnaly
       body: JSON.stringify(body),
       signal: controller.signal
     });
+  } catch (error) {
+    console.error("Network error calling Gemini API:", error);
+    throw new Error("Failed to connect to analysis service. Please try again later.");
   } finally {
     clearTimeout(timeout);
   }
 
   if (!response.ok) {
-    throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    console.error(`Gemini API error: ${response.status} ${response.statusText}`);
+    throw new Error(`Analysis service error: ${response.status}. Please try again later.`);
   }
 
-  const data: any = await response.json();
+  let data: any;
+  try {
+    data = await response.json();
+  } catch (error) {
+    console.error("Error parsing Gemini response:", error);
+    throw new Error("Failed to parse analysis response. Please try again later.");
+  }
+
   // Gemini returns the text in data.candidates[0].content.parts[0].text
   let resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
@@ -156,7 +209,8 @@ export async function analyzeResumeWithGemini(text: string): Promise<ResumeAnaly
   try {
     result = JSON.parse(resultText);
   } catch (e) {
-    throw new Error("Failed to parse Gemini response as JSON: " + resultText);
+    console.error("Failed to parse Gemini response as JSON:", resultText);
+    throw new Error("Failed to parse analysis results. Please try again later.");
   }
 
   // After parsing resultText, call fillSectionDefaults before returning

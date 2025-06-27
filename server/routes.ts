@@ -1,5 +1,4 @@
 import type { Express, Request, Response } from "express";
-import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
 import { extractTextFromDocument, isValidFileType } from "./document-parser";
@@ -31,37 +30,55 @@ interface ResumeRequest extends Request {
 // In-memory cache for resume analysis results
 const resumeCache: Record<string, any> = {};
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<void> {
   // API routes for resume analysis
   app.post("/api/resume/analyze", upload.single("file"), async (req: ResumeRequest, res: Response) => {
     try {
+      console.log("Resume upload request received");
       const file = req.file;
       
       // Flag if not a resume (PDF or DOCX) - check before any file reading
       if (!file) {
+        console.log("No file uploaded");
         return res.status(400).json({ message: "No file uploaded" });
       }
-      // Remove file type check - accept all extensions
-      // const allowedMimeTypes = [
-      //   "application/pdf",
-      //   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      //   "application/msword"
-      // ];
-      // if (!allowedMimeTypes.includes(file.mimetype)) {
-      //   return res.status(400).json({ message: "Please upload a resume file (PDF or DOCX) only." });
-      // }
+
+      console.log("File received:", {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+      });
 
       // Only now extract text from the document
-      const text = await extractTextFromDocument(file.buffer, file.mimetype);
+      let text: string;
+      try {
+        text = await extractTextFromDocument(file.buffer, file.mimetype);
+        console.log("Text extracted successfully, length:", text.length);
+      } catch (extractError) {
+        console.error("Error extracting text:", extractError);
+        return res.status(400).json({ 
+          message: extractError instanceof Error ? extractError.message : "Failed to extract text from document" 
+        });
+      }
       
       // Hash the resume text for caching
       const hash = crypto.createHash('sha256').update(text).digest('hex');
       if (resumeCache[hash]) {
+        console.log("Returning cached result");
         return res.status(200).json(resumeCache[hash]);
       }
 
       // Check if the document is a resume using Gemini
-      const isResume = await isResumeDocument(text);
+      let isResume: boolean;
+      try {
+        isResume = await isResumeDocument(text);
+        console.log("Resume check result:", isResume);
+      } catch (resumeCheckError) {
+        console.error("Error checking if document is resume:", resumeCheckError);
+        // If Gemini fails, assume it's a resume and continue
+        isResume = true;
+      }
+
       if (!isResume) {
         const notResumeResult = {
           id: Date.now(),
@@ -90,7 +107,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Analyze the resume using Gemini
-      const analysisResult = await analyzeResumeWithGemini(text);
+      let analysisResult: any;
+      try {
+        analysisResult = await analyzeResumeWithGemini(text);
+        console.log("Analysis completed successfully");
+      } catch (analysisError) {
+        console.error("Error analyzing resume with Gemini:", analysisError);
+        // Return a fallback analysis if Gemini fails
+        analysisResult = {
+          overallScore: 70,
+          keywordsScore: 70,
+          experienceScore: 70,
+          skillsScore: 70,
+          educationScore: 70,
+          formattingScore: 70,
+          feedback: {
+            keywords: "Unable to analyze keywords due to technical issues. Please try again later.",
+            experience: "Unable to analyze experience due to technical issues. Please try again later.",
+            skills: "Unable to analyze skills due to technical issues. Please try again later.",
+            education: "Unable to analyze education due to technical issues. Please try again later.",
+            formatting: "Unable to analyze formatting due to technical issues. Please try again later."
+          },
+          improvementSuggestions: [
+            "Please try uploading your resume again in a few moments.",
+            "Ensure your resume is in PDF or DOCX format.",
+            "Check that your resume contains clear sections for experience, skills, and education."
+          ]
+        };
+      }
+
       const result = {
         id: Date.now(),
         filename: file.originalname,
@@ -99,6 +144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...analysisResult
       };
       resumeCache[hash] = result;
+      console.log("Analysis result cached and returning");
       return res.status(200).json(result);
     } catch (error) {
       console.error("Error analyzing resume:", error);
@@ -212,8 +258,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-
-  const httpServer = createServer(app);
-
-  return httpServer;
 }
